@@ -4,7 +4,7 @@ Bruna da Silva Gonçalves
 Matrícula : 708674
 
 
-Os requisitos básicos são:
+## Os requisitos básicos são:
 
 1 - O servidor deve gerenciar múltiplas salas de bate papo.
 
