@@ -7,16 +7,18 @@ import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
-import java.net.DatagramPacket;
-import java.net.InetAddress;
-import java.net.MulticastSocket;
 import java.net.Socket;
+import java.net.UnknownHostException;
+
 import javax.swing.*;
 
 public class Client extends JFrame implements ActionListener, KeyListener {
@@ -28,12 +30,12 @@ public class Client extends JFrame implements ActionListener, KeyListener {
     private JLabel lblHistorico;
     private JLabel lblMsg;
     private JPanel pnlContent;
+    private Socket socket;
     private OutputStream ou ;
     private Writer ouw; 
     private BufferedWriter bfw;
     private JTextField txtNome;
-    MulticastSocket mSocket = null;
-    String args;
+    Multicast mSocket;
 
     public Client() throws IOException{
 	    JLabel lblMessage = new JLabel("Digite o seu nome: ");
@@ -45,7 +47,7 @@ public class Client extends JFrame implements ActionListener, KeyListener {
 	    texto.setEditable(false);
 	    texto.setBackground(new Color(240,240,240));
 	    txtMsg = new JTextField(30);
-	    lblHistorico = new JLabel("Histórico");
+	    lblHistorico = new JLabel("Historico");
 	    lblMsg= new JLabel("Mensagem");
 	    btnSend = new JButton("Enviar");
 	    btnSend.setToolTipText("Enviar Mensagem");
@@ -74,27 +76,9 @@ public class Client extends JFrame implements ActionListener, KeyListener {
 	    setVisible(true);
 	    setDefaultCloseOperation(EXIT_ON_CLOSE);
     }
-   
 
     public void conectar() throws IOException{
-        
-        InetAddress groupIp = InetAddress.getByName(args[1]);
-			
-        mSocket = new MulticastSocket(6789);
-        mSocket.joinGroup(groupIp);
-        
-        byte[] message = args[0].getBytes();
-        DatagramPacket messageOut = new DatagramPacket(message, message.length, groupIp, 6789);
-        mSocket.send(messageOut);
-        byte[] buffer = new byte[1000];
-        for (int i = 0; i < 3; i++) { // get messages from others in group
-            DatagramPacket messageIn = new DatagramPacket(buffer, buffer.length);
-            mSocket.receive(messageIn);
-            System.out.println("Recebido:" + new String(messageIn.getData()).trim());
-        }
-
-
-        ou = mSocket.getOutputStream();
+        ou = socket.getOutputStream();
         ouw = new OutputStreamWriter(ou);
         bfw = new BufferedWriter(ouw);
         bfw.write(txtNome.getText()+"\r\n");
@@ -117,7 +101,7 @@ public class Client extends JFrame implements ActionListener, KeyListener {
     }
 
     public void escutar() throws IOException{
-        InputStream in = mSocket.getInputStream();
+        InputStream in = socket.getInputStream();
         InputStreamReader inr = new InputStreamReader(in);
         BufferedReader bfr = new BufferedReader(inr);
         int indexMessage = -1;
@@ -145,7 +129,7 @@ public class Client extends JFrame implements ActionListener, KeyListener {
         bfw.close();
         ouw.close();
         ou.close();
-        mSocket.close();
+        socket.close();
     }
 
     @Override
@@ -180,6 +164,29 @@ public class Client extends JFrame implements ActionListener, KeyListener {
 
     public static void main(String []args) throws IOException{
         Client app = new Client();
+        Socket s = null;
+		try {
+			int serverPort = 7896;
+			s = new Socket(args[1], serverPort);
+			DataInputStream in = new DataInputStream(s.getInputStream());
+			DataOutputStream out = new DataOutputStream(s.getOutputStream());
+			out.writeUTF(args[0]);
+			String data = in.readUTF(); // ï¿½ uma linha do fluxo de dados
+			System.out.println("Recebido: " + data);
+		} catch (UnknownHostException e) {
+			System.out.println("Socket:" + e.getMessage());
+		} catch (EOFException e) {
+			System.out.println("EOF:" + e.getMessage());
+		} catch (IOException e) {
+			System.out.println("readline:" + e.getMessage());
+		} finally {
+			if (s != null)
+				try {
+					s.close();
+				} catch (IOException e) {
+					System.out.println("close:" + e.getMessage());
+				}
+		}
         app.conectar();
         app.escutar();
     }

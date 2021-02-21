@@ -2,30 +2,31 @@ package chatProject;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.EOFException;
 import java.io.IOException;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.ServerSocket;
-import java.net.SocketException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.util.HashMap;
 
-public class Server{
+public class Server extends Thread {
 	private static HashMap<String, BufferedWriter> clientes;
 	private String nome;
-	private DatagramSocket aSocket;
+	private Socket clientSocket;
 	private InputStream in;  
 	private InputStreamReader inr;  
 	private BufferedReader bfr;
 	
-	public Server(DatagramSocket aSocket){
-        this.aSocket = aSocket;
+	public Server(Socket clientSocket){
+        this.clientSocket = clientSocket;
         try {
-            in  = aSocket.getInputStream();
+            in  = clientSocket.getInputStream();
             inr = new InputStreamReader(in);
             bfr = new BufferedReader(inr);
         } catch (IOException e) {
@@ -36,7 +37,7 @@ public class Server{
     public void run() {
         try {
             String msg;
-            OutputStream ou =  this.aSocket.getOutputStream();
+            OutputStream ou =  this.clientSocket.getOutputStream();
             Writer ouw = new OutputStreamWriter(ou);
             BufferedWriter bfw = new BufferedWriter(ouw); 
             nome = msg = bfr.readLine();
@@ -92,33 +93,73 @@ public class Server{
     }
 
     public static void main(String []args) {
-       
-        DatagramSocket aSocket = null;
-		
-		String message;
 
+    	ServerSocket listenSocket = null;
+        
 		try {
-
-			aSocket = new DatagramSocket(1234);
+			// Porta do servidor
+			int serverPort = 7896;
             clientes = new HashMap<String, BufferedWriter>();
-			byte[] buffer = new byte[1000];
+			
+			// Fica ouvindo a porta do servidor esperando uma conexao.
+			listenSocket = new ServerSocket(serverPort);
+			System.out.println("Servidor: ouvindo porta TCP/7896.");
 
 			while (true) {
-				DatagramPacket request = new DatagramPacket(buffer, buffer.length);
-				aSocket.receive(request);
-				message = new String(request.getData()).trim();
-				DatagramPacket reply = new DatagramPacket(request.getData(), request.getLength(), request.getAddress(),
-						request.getPort());
-				aSocket.send(reply);
+				Socket clientSocket = listenSocket.accept();
+				new Connection(clientSocket);
+                Thread t = new Server(clientSocket);
+                t.start();
 			}
-		} catch (SocketException e) {
-			System.out.println("Socket: " + e.getMessage());
 		} catch (IOException e) {
-			System.out.println("IO: " + e.getMessage());
+			System.out.println("Listen socket:" + e.getMessage());
 		} finally {
-			if (aSocket != null)
-				aSocket.close();
+			if (listenSocket != null)
+				try {
+					listenSocket.close();
+					System.out.println("Servidor: liberando porta TCP/7896.");
+				} catch (IOException e) {
+					/* close falhou */
+				}
+		}
+
+    }
+}
+
+class Connection extends Thread {
+	DataInputStream in;
+	DataOutputStream out;
+	Socket clientSocket;
+
+	public Connection(Socket aClientSocket) {
+		try {
+			clientSocket = aClientSocket;
+			in = new DataInputStream(clientSocket.getInputStream());
+			out = new DataOutputStream(clientSocket.getOutputStream());
+			this.start();
+		} catch (IOException e) {
+			System.out.println("Conex�o:" + e.getMessage());
 		}
 	}
-       
-    }
+
+	public void run() {
+		try { // servidor de repeti��o
+
+			String data = in.readUTF(); // le a linha da entrada
+			System.out.println("Recebido: " + data);
+			out.writeUTF(data);
+		} catch (EOFException e) {
+			System.out.println("EOF:" + e.getMessage());
+		} catch (IOException e) {
+			System.out.println("readline:" + e.getMessage());
+		} finally {
+			try {
+				clientSocket.close();
+				System.out.println("Servidor: fechando conex�o com cliente.");
+			} catch (IOException e) {
+				/* close falhou */
+			}
+		}
+
+	}
+}
